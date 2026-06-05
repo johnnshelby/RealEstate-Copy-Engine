@@ -1,0 +1,84 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitive Definition
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Allow public read on the test document to verify connection status
+    match /test/connection {
+      allow read: if true;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 1. User Profile Security
+    match /users/{userId}/profile/default {
+      allow get: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidProfile(incoming());
+      
+      function isValidProfile(data) {
+        return data.keys().hasAll(['userId', 'name'])
+          && data.userId == request.auth.uid
+          && data.name is string && data.name.size() <= 100
+          && (!('phone' in data) || (data.phone is string && data.phone.size() <= 20))
+          && (!('lineId' in data) || (data.lineId is string && data.lineId.size() <= 50))
+          && (!('company' in data) || (data.company is string && data.company.size() <= 100))
+          && (!('taxId' in data) || (data.taxId is string && data.taxId.size() <= 20))
+          && (!('updatedAt' in data) || data.updatedAt == request.time);
+      }
+    }
+
+    // 2. History Security
+    match /users/{userId}/history/{historyId} {
+      allow list, get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidHistory(incoming());
+      allow delete: if isOwner(userId);
+
+      function isValidHistory(data) {
+        return data.keys().hasAll(['userId', 'inputInfo', 'result', 'createdAt'])
+          && data.userId == request.auth.uid
+          && data.inputInfo is string && data.inputInfo.size() <= 5000
+          && data.result is string && data.result.size() <= 20000
+          && data.createdAt == request.time;
+      }
+    }
+
+    // 3. Properties Library Security
+    match /users/{userId}/properties/{propertyId} {
+      allow list, get: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidProperty(incoming());
+      allow delete: if isOwner(userId);
+
+      function isValidProperty(data) {
+        return data.keys().hasAll(['userId', 'rawInfo', 'analysisResult', 'createdAt'])
+          && data.userId == request.auth.uid
+          && data.rawInfo is string && data.rawInfo.size() <= 10000
+          && data.analysisResult is string && data.analysisResult.size() <= 30000
+          && data.createdAt == request.time
+          && (!('updatedAt' in data) || data.updatedAt == request.time);
+      }
+    }
+  }
+}

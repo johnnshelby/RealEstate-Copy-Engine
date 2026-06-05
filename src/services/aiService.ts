@@ -1,90 +1,203 @@
-import { GoogleGenAI, Type } from "@google/genai";
-
-const SYSTEM_INSTRUCTION = `你不是文案助手。
-你是：「台灣租賃市場研究 × 競品分析 × 合法成交型 SEO 文案引擎」
-你是一位台灣在地、具10年以上經驗的包租代管業者、租賃仲介、房東開發顧問、市場調查分析師、SEO文案專家與社群流量操盤手。
-
-你的任務不是直接寫文案，而是依照完整商業流程執行以下四個步驟：
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 1：市場調查（必做，不可跳過）
-━━━━━━━━━━━━━━━━━━━━━━━━
-模擬分析同區同類型競品市場。輸出格式包含：【市場調查報告】（區域、類型、同區平均租金、租金帶、主流賣點、常見弱點、目前市場需求、常見SEO搜尋詞）。
-廠房分析重點：面寬、深度、高度、三相電、廠登、營登、臨路、貨櫃可否、倉儲價值。
-住宅分析重點：格局、採光、車位、家具、可租補、可報稅、可養寵。
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 2：市場定位分析
-━━━━━━━━━━━━━━━━━━━━━━━━
-將物件與競品比較，判斷定位策略。輸出格式包含：【市場定位分析】（市場定位、定價評估、物件優勢、物件劣勢、行銷策略、建議文案方向）。
-注意：不可廠登改打物流/倉儲；不可報稅則改強調空間使用彈性。
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 3：文案生成（根據前兩步結果產出）
-━━━━━━━━━━━━━━━━━━━━━━━━
-產出以下平台文案：
-1. 【Facebook版】：以痛點切入 Hook，條列優勢，私訊CTA，附法規尾段。
-2. 【591版】：SEO標記公式標題，條列詳細資訊，來電/Line預約CTA，附法規尾段。
-3. 【IG / Threads版】：精簡大標，Emoji亮點，私訊卡位CTA，附法規尾段。
-4. 【SEO關鍵字】：至少10組「地區+物件類型+特色」。
-5. 【Hashtag】：至少10組在地化標籤。
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 4：法規合規檢查（強制執行）
-━━━━━━━━━━━━━━━━━━━━━━━━
-禁止使用「最便宜」、「秒殺」、「唯一」、「保證出租」等誇大詞彙，改用「同區少見」、「條件佳」、「稀有釋出」等專業用詞。
-嚴禁公開門牌、歧視性招租、虛假條件。
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-固定法規尾段（每篇文案結尾必須完整附上）
-━━━━━━━━━━━━━━━━━━━━━━━━
-🤝🏻成交時需收取半個月服務費
-※本廣告自刊登日起七日內有效，過期資訊可能已異動，請來電或加 Line 確認售租狀況。
-聯絡方式📲0966-705-761
-Line ID：huang92071213
-經紀業：生活尋家廠房物業有限公司
-統編：60372057
-經紀人：鄭善仁（113）南市字第001001號
-營業員：黃先生（115）登字第505314號
-以上廣告文案如有誤差一律依謄本、現況、登記資料為準。
-
-輸出要求：
-- 必須是台灣繁體中文。
-- 仲介口吻、專業可信、SEO導向、高互動。
-- 總長度必須完整，不要截斷，確保文案可直接複製貼上。`;
-
-const FIXED_TAIL = `🤝🏻成交時需收取半個月服務費
-※本廣告自刊登日起七日內有效，過期資訊可能已異動，請來電或加 Line 確認售租狀況。
-聯絡方式📲0966-705-761
-Line ID：huang92071213
-經紀業：生活尋家廠房物業有限公司
-統編：60372057
-經紀人：鄭善仁（113）南市字第001001號
-營業員：黃先生（115）登字第505314號
-以上廣告文案如有誤差一律依謄本、現況、登記資料為準。`;
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-
-export async function generateRentalAnalysis(propertyInfo: string, customFooter: string) {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not configured.");
+function showRetryMsg(msg: string) {
+  if (typeof document === 'undefined') return;
+  let el = document.getElementById('retry-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'retry-toast';
+    el.style.cssText = `
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background-color: #0f172a;
+      border: 1px solid #f87171;
+      color: #f8fafc;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-family: system-ui, -apple-system, sans-serif;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+      z-index: 99999;
+      max-width: 350px;
+      line-height: 1.6;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    `;
+    
+    const iconSp = document.createElement('span');
+    iconSp.textContent = '⏳';
+    iconSp.style.fontSize = '20px';
+    el.appendChild(iconSp);
+    
+    const textNode = document.createElement('div');
+    textNode.id = 'retry-toast-text';
+    el.appendChild(textNode);
+    
+    document.body.appendChild(el);
   }
-
-  const dynamicSystemInstruction = `${SYSTEM_INSTRUCTION}
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-【強制規則】每篇文案結尾必須完整附上以下自定義法規尾段：
-━━━━━━━━━━━━━━━━━━━━━━━━
-${customFooter}`;
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: [{ parts: [{ text: `請分析以下物件資訊並產出完整報告與文案：\n\n${propertyInfo}` }] }],
-    config: {
-      systemInstruction: dynamicSystemInstruction,
-      temperature: 0.7,
-    },
-  });
-
-  return response.text;
+  const textEl = document.getElementById('retry-toast-text');
+  if (textEl) {
+    textEl.innerHTML = `<span style="font-weight: 600; color: #fca5a5;">API 頻率/額度限制：</span><br/>${msg}`;
+  }
+  el.style.display = 'flex';
 }
+
+function hideRetryMsg() {
+  if (typeof document === 'undefined') return;
+  const el = document.getElementById('retry-toast');
+  if (el) el.style.display = 'none';
+}
+
+async function handleResponse(response: Response): Promise<any> {
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const textText = await response.text().catch(() => "");
+    // If response is HTML, it means standard Express error page, Vite route fallback, or reverse proxy error
+    if (textText.trim().startsWith("<!doctype html>") || textText.trim().startsWith("<html")) {
+      throw new Error(`【⚠️ 後端伺服器回應錯誤 (HTML)】\n\n後端伺服器傳回了 HTML 網頁而非 JSON 格式資料（狀態碼：${response.status}）。\n\n這通常代表：\n1. 專案伺服器正在重新啟動中（請稍候 5-10 秒重新整理）。\n2. 您的專案正在編譯，或是正在啟動。\n\n💡 請稍候重試或重新編整網頁。`);
+    }
+    throw new Error(`伺服器傳回非 JSON 規格的回應（狀態碼：${response.status}）：\n${textText.substring(0, 300)}`);
+  }
+  
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || `伺服器回應錯誤（狀態碼：${response.status}）`);
+  }
+  return data;
+}
+
+async function fetchWithRetry(url: string, options: RequestInit, retries: number = 5): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, options);
+      
+      const contentType = res.headers.get("content-type") || "";
+      const isHtmlResponse = !contentType.includes("application/json");
+      
+      // If the server returns a 429, 503, or a transient HTML route fallback (e.g., status 200 but HTML content)
+      if (res.status === 429 || res.status === 503 || isHtmlResponse) {
+        let serverError = '';
+        if (contentType.includes("application/json")) {
+          const errorData = await res.clone().json().catch(() => ({}));
+          serverError = errorData.error || '';
+        } else {
+          const textBody = await res.clone().text().catch(() => '');
+          if (textBody.trim().startsWith("<!doctype html>") || textBody.trim().startsWith("<html")) {
+            serverError = "【後端伺服器正在啟動或重新編譯中，系統將於數秒後自動重試】";
+          } else {
+            serverError = textBody.substring(0, 150);
+          }
+        }
+        
+        let wait = Math.pow(2, i) * 10000; // 10s, 20s, 40s...
+        if (isHtmlResponse) {
+          wait = (i + 1) * 2000; // 2s, 4s, 6s, 8s, 10s for super quick recovery during server restarts
+        }
+        
+        let errorLabel = "API 錯誤";
+        if (res.status === 429) errorLabel = "API 額度超限";
+        else if (res.status === 503) errorLabel = "模型伺服器忙碌";
+        else if (isHtmlResponse) errorLabel = "伺服器初始化中";
+        
+        console.warn(`${errorLabel} (${res.status})，${wait / 1000} 秒後重試...`);
+        showRetryMsg(`目前${errorLabel} (狀態碼 ${res.status})。系統將於 ${wait / 1000} 秒後自動重試（嘗試次數：${i + 1}/${retries}）...\n${serverError ? `${serverError}` : ""}`);
+        
+        await new Promise(resolve => setTimeout(resolve, wait));
+        continue;
+      }
+      
+      hideRetryMsg();
+      return res;
+    } catch (e) {
+      if (i === retries - 1) {
+        hideRetryMsg();
+        throw e;
+      }
+      const wait = Math.pow(2, i) * 10000;
+      showRetryMsg(`網路連線異常。系統將於 ${wait / 1000} 秒後自動重試（嘗試次數：${i + 1}/${retries}）...`);
+      await new Promise(resolve => setTimeout(resolve, wait));
+    }
+  }
+  hideRetryMsg();
+  throw new Error('已達最大自動重試次數，請確認您的 API 金鑰配額，或稍後再試。');
+}
+
+export async function generateRentalAnalysis(
+  propertyInfo: string,
+  customFooter: string,
+  tone: string = 'professional'
+): Promise<string> {
+  const response = await fetchWithRetry("/api/generate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ propertyInfo, customFooter, tone }),
+  });
+  const data = await handleResponse(response);
+  return data.text;
+}
+
+export async function analyzeCompetitorCopy(
+  ourCopy: string,
+  competitorUrl: string,
+  competitorText: string,
+  myPropertyInfo?: string
+): Promise<string> {
+  const response = await fetchWithRetry("/api/analyze", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ourCopy, competitorUrl, competitorText, myPropertyInfo }),
+  });
+  const data = await handleResponse(response);
+  return data.text;
+}
+
+export async function refinePlatformCopy(
+  originalCopy: string,
+  refinementInstructions: string,
+  platform: string,
+  customFooter: string
+): Promise<string> {
+  const response = await fetchWithRetry("/api/refine", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ originalCopy, refinementInstructions, platform, customFooter }),
+  });
+  const data = await handleResponse(response);
+  return data.text;
+}
+
+export async function proxyScrapeUrl(url: string): Promise<string> {
+  const response = await fetchWithRetry("/api/proxy-scrape", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url }),
+  });
+  const data = await handleResponse(response);
+  return data.text;
+}
+
+export async function generateTitles(
+  propertyInfo: string,
+  wizardData: any,
+  inputMode: 'free' | 'wizard'
+): Promise<string[]> {
+  const response = await fetchWithRetry("/api/generate-titles", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ propertyInfo, wizardData, inputMode }),
+  });
+  const data = await handleResponse(response);
+  return data.titles || [];
+}
+

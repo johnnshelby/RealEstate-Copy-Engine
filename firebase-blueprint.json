@@ -1,0 +1,34 @@
+{
+  "entities": {
+    "Property": {
+      "title": "Real Estate Property",
+      "description": "Details about a property listing and its generated marketing content",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who owns this property" },
+        "title": { "type": "string", "description": "Display title for the property" },
+        "rawInfo": { "type": "string", "description": "The raw input string" },
+        "structuredData": {
+          "type": "object",
+          "properties": {
+            "price": { "type": "number" },
+            "area": { "type": "number" },
+            "location": { "type": "string" },
+            "type": { "type": "string", "enum": ["factory", "house", "commercial"] }
+          }
+        },
+        "tone": { "type": "string", "enum": ["professional", "fun", "warm"] },
+        "analysisResult": { "type": "string", "description": "The full AI response string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "rawInfo", "tone"]
+    }
+  },
+  "firestore": {
+    "users/{userId}/properties": {
+      "schema": "Property",
+      "description": "User's saved property records"
+    }
+  }
+}
