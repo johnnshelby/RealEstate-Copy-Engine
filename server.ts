@@ -21,7 +21,7 @@ function getAI(): GoogleGenAI {
   }
 
   if (!aiInstance || lastInjectedKey !== apiKey) {
-    // 2. Diagnostic logging (safe and informative)
+    // Diagnostic logging (safe and informative)
     console.log("=== API KEY DIAGNOSTICS ===");
     console.log("Available Env Keys containing key/api/gemini:", Object.keys(process.env).filter(k => k.toLowerCase().includes("key") || k.toLowerCase().includes("api") || k.toLowerCase().includes("gemini")));
     if (apiKey) {
@@ -32,7 +32,6 @@ function getAI(): GoogleGenAI {
     }
     console.log("=== END DIAGNOSTICS ===");
 
-    // 3. Fallback check for placeholder values copy-pasted or auto-injected from .env.example
     const isPlaceholder = !apiKey || 
       apiKey.toUpperCase() === "MY_GEMINI_API_KEY" || 
       apiKey.toUpperCase() === "YOUR_GEMINI_API_KEY" ||
@@ -66,7 +65,6 @@ function handleGeminiError(err: any, res: express.Response) {
     } catch (_) {}
   }
   
-  // 1. Detect Quota Exceeded & Rate Limit error (429 / RESOURCE_EXHAUSTED)
   if (
     err?.status === 429 ||
     err?.code === 429 ||
@@ -81,7 +79,6 @@ function handleGeminiError(err: any, res: express.Response) {
     });
   }
 
-  // 1.5 Detect Model Overloaded / UNAVAILABLE Service Error (503)
   if (
     err?.status === 503 ||
     err?.code === 503 ||
@@ -96,7 +93,6 @@ function handleGeminiError(err: any, res: express.Response) {
     });
   }
   
-  // 2. Detect Invalid API Key error (400)
   if (
     errMsg.includes("API key not valid") ||
     errMsg.includes("API_KEY_INVALID") ||
@@ -142,7 +138,6 @@ async function generateContentWithRetry(
         const errMsg = err?.message || "";
         console.error(`[Gemini API Error] Model: ${modelName}, Attempt: ${attempt + 1}, Code: ${err?.code}, Status: ${err?.status}, Message: ${errMsg}`);
 
-        // Retry on UNAVAILABLE (503), RESOURCE_EXHAUSTED (429), or temporary overload errors
         const isRetriable = 
           err?.status === 503 ||
           err?.status === 429 ||
@@ -155,11 +150,10 @@ async function generateContentWithRetry(
           errMsg.toLowerCase().includes("temporary");
 
         if (!isRetriable) {
-          // Throw non-retriable errors immediately (e.g., API key invalid, blocked content)
           throw err;
         }
 
-        const delay = Math.pow(2, attempt) * 1000; // 1s, 2s
+        const delay = Math.pow(2, attempt) * 1000;
         console.log(`[Gemini API] Retriable error encountered. Waiting ${delay / 1000}s before next attempt...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
@@ -172,7 +166,7 @@ async function generateContentWithRetry(
 
 // Memory caching
 const cache = new Map<string, { result: any, timestamp: number }>();
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache to prevent duplicate tokens consumption for identical prompts
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache
 
 function getCached(key: string) {
   const item = cache.get(key);
@@ -212,71 +206,68 @@ app.post("/api/generate", async (req, res) => {
 
   try {
     const ai = getAI();
-    
+
+    const isIndustrial = 
+      propertyInfo.toLowerCase().includes("factory") ||
+      propertyInfo.includes("廠房") ||
+      propertyInfo.includes("工廠") ||
+      propertyInfo.includes("倉儲") ||
+      propertyInfo.includes("工業") ||
+      propertyInfo.includes("面寬") ||
+      propertyInfo.includes("天車");
+
+    const SYSTEM_INSTRUCTION_INDUSTRIAL = `你扮演「台灣工業廠房與倉儲地產專家與成交型文案引擎」。
+此物件為【工廠 / 廠房 / 倉儲】工業不動產類型。請嚴格、絕對遵照以下「成交導向廠房文案」之輸出規則與文案風格，為各個推廣管道標籤項目產出內容。
+
+【各推廣管道（FB_POST、IG_POST、THREADS_POST、591_POST、LAKUYA_POST）之硬性輸出規則】：
+每篇平台發文文案都「必須」包含並依序展現以下 Step 1 至 Step 9 的全部邏輯架構，絕不可跳過任何步驟或變更排序：
+
+Step1【吸睛鉤子】：
+格式：【地區 + 坪數 + 類型】＋價格亮點 
+（例：【台中烏日 150坪 鋼構廠房】低總價破盤驚喜價！ / 【桃園蘆竹 300坪 消防倉儲】稀有降價釋出！）
+
+Step2【提前放 CTA】：
+放電話與聯絡方式（聯絡資訊）。
+
+Step3【包裝標題】：
+使用：精選物件 / 稀有釋出 / 立即進駐 / 低總價 / 交通便利 （根據物件特點選擇最合適之 1~2 款使用）。
+
+Step4 & Step5【核心資訊排序與數據化輸出（不可變更順序）】：
+必須以下列 Emoji 與對應之欄位標題與順序，100% 數據化條列輸出（不可變更欄位，如果某些資訊缺失也請列出並寫「私訊確認」）：
+📍地點：
+📐坪數：
+⚡設備（含電力資訊）：
+🚛交通（交通條件/進出動線，優先強調交通條件）：
+💰租金（租金費用，必須醒目標記價格）：
+📏規格（含面寬、深度、高度等尺寸規格）：
+💎特殊優勢：
+
+Step6【動態 CTA 指令】：
+加入引導：立即預約 / 私訊了解 / 安排看屋。
+
+Step7【品牌背書】：
+公司名稱 / 服務人員 / 專業描述 等背書資訊。
+
+Step8【使用限制】：
+清楚列出「禁用/限制行業與產業」（若未提供則註明「禁用高污染及強酸鹼化學行業，其他請私訊詢問」）。
+
+Step9【法遵模組】：
+文案末尾必須如實且完整附上使用者提供的「自定義法規尾段」。包含服務費說明、經紀業與營業員資訊、有效期限（即文案末端完整附上下面的自定義法規尾段）。
+
+【文案風格指導原則】：
+* 以「廠房客群思維」撰寫：注重廠務實用、臨路、大電力、挑高等核心數據。
+* 優先強調「交通與車輛進出條件」（臨路寬度、40呎/20呎貨櫃車進出便利度、鄰近交流道等）。
+* 使用「大量數字」而非空洞不實口號。
+* 格式極簡、整齊容易快速掃讀，避免使用過多華麗形容詞。
+* 強調「物件稀缺性」與「立即撥打預約看屋行動」。`;
+
     const SYSTEM_INSTRUCTION = `你扮演「台灣租賃市場專家與成交型文案引擎」。請精簡、無贅字地分析物件，並依序輸出標籤區塊（每節內容應緊湊、減少鋪疊，字數不拖沓）：
-[PROPERTY_INFO]
-【物件資訊公開表】（僅列出已有提供的實體資訊，其餘忽略。門牌顯示：詳址私訊確認）
-- 基本、電力、設備、出入、動線、挑高、用途、廠登、營登、費用、租約規範、帶看方式、安全聲明等。
 
-[PLATFORM_STUDY]
-【平台流量研究報告】簡短提供社群平台（FB、IG、Threads）的操作策略、流量特性與最佳發文時段。
-
-[MARKET_REPORT]
-【市場調查報告】紧凑扼要分析同類型/區域房屋的租金行情、主要核心賣點與推薦之SEO關聯搜尋詞（200字以內）。
-
-[POSITIONING]
-【市場定位分析】精煉點出該物件之市場定位、定價評估、關鍵客群、與推廣策略。
-
-[FB_POST]
-【Facebook版】：親切且真實口語化（使用 8~12個表情符號）。首段用痛點Hook（如：租金划算、挑高動線佳），結尾帶出互動引導（例如問句或促使分享）。最後完整包含下面提供的「法規尾段」。
-
-[IG_POST]
-【Instagram版】：精簡時尚、節奏強烈（使用 10~15個表情符號）。強調視覺美感、亮點與數字，並包含強烈的儲存或轉寄指令。最後完整包含下面提供的「法規尾段」。
-
-[THREADS_POST]
-【Threads版】：極口語，每句獨立成行且不超過150字（使用 5~8個表情符號），結尾搭配能引發共鳴的反問句（例如：「你最不能忍受哪種房客？」、「這種面寬你覺得開什麼店會賺？」）。最後完整包含下面提供的「法規尾段」。
-
-[591_POST]
-【591版】：正式專業。採用高點擊的 SEO 標題公式，表情符號少於5個，資訊井井有條。最後完整包含下面提供的「法規尾段」。
-
-[LAKUYA_POST]
-【樂屋網版】：偏向溫馨、強調起家厝/家庭感，表情符號少於6個。最後完整包含下面提供的「法規尾段」。
-
-[SEO_TAGS]
-提供 10 組熱門 SEO 關鍵字，與至少 10 組熱門 Hashtag。
-
-規則：
 1. 嚴格遵守《公平交易法》第二十一條及《不動產經紀業管理條例》。絕不要捏造、變造或憑空想像任何未提供之地理、設備、價格或法規數據。
 2. 禁止說「秒殺」、「最便宜」、「保證出租」、「精華地段」（未經證實）等誇大或承諾收益字眼。
 3. 發文文案結尾必須如實、完整包含使用者之「法規尾段」。
 4. 專業、務實且接地氣，保持極高生成品質與效率，絕不輸出無用贅字，節約 token 資源！
-5. 【重要硬性規定】：不可省略價格！不論選擇何種「寫作語調（Tone）」或是在何種平台（Facebook, Instagram, Threads, 591, 樂屋網）發文，生成的每一篇租賃文案或說明中，都【絕對必須明確、醒目地寫出並標示該物件的租金價格】！`;
-
-    const SYSTEM_INSTRUCTION_OLD = `你不是文案助手。
-你是：「台灣租賃市場研究 × 競品分析 × 合法成交型 SEO 文案引擎」
-你是一位台灣在地、具10年以上經驗的包租代管業者、租賃仲介、房東開發顧問、市場調查分析師、SEO文案專家與社群流量操盤手。
-
-每次收到物件資訊，必須從 STEP 0 開始依序執行，不可跳過任何步驟。
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-廣告真實性最高原則（全程強制）
-━━━━━━━━━━━━━━━━━━━━━━━━
-所有內容100%根據使用者提供資訊產出。
-未提供的條件一律標示「未提供」或「請私訊確認」，不得捏造、美化、誇大。
-依台灣《公平交易法》第21條與《不動產經紀業管理條例》第26條，廣告不實可受裁罰並負民事賠償責任。
-
-禁止詞彙：最便宜、秒殺、唯一、保證出租、絕無僅有、投資必賺、神物件、錯過不再、精華地段（未確認）、採光佳（未確認）、安靜（未確認）、生活機能佳（未確認）
-替代用詞：同區少見、條件佳、使用彈性高、稀有釋出、歡迎預約了解、依現況為準
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-格式與表情符號（全平台適用）
-━━━━━━━━━━━━━━━━━━━━━━━━
-只要是社群軟體的發文（FB、IG、Threads），都必須根據文案氛圍加入適當的表情符號（Emoji），以增加親切感、節奏感與視覺吸引力。
-
-禁止 Emoji＋粗體＋冒號組合（例：📍 **精華地段**：）
-禁止每行粗體強調
-文案要像真人仲介在寫，不像 AI 套範本
-Emoji 單獨使用，或放於行首/行末作為點綴，不與粗體緊密搭配
+5. 【重要硬性規定】：不可省略價格！不論選擇何種「寫作語調（Tone）」或是在何種平台（Facebook, Instagram, Threads, 591, 樂屋網）發文，生成的每一篇租賃文案或說明中，都【絕對必須明確、醒目地寫出並標示該物件的租金價格】！
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 0：物件資訊公開表（最優先輸出）
@@ -420,12 +411,13 @@ STEP 6：自我檢查與輸出要求
       urgent: '【急租催租模型】：字眼極具迫切感、強烈吸引力、強調難得機會、稀有釋出（如「手慢無！」、「房東佛心降價房客搶租中」），並在社群軟體中多加使用 ⏳, 🚨, 💥, 🏃‍♂️ 等極具催促急迫感的表情符號。',
       luxury: '【頂級奢華模型】：強調建材極致、高端隱私、美學景觀、富人品味生活、精裝細節與非凡格局，並在社群軟體中多加使用 💎, ✨, 🏰, 🥂, 🌟 等傳遞奢華尊崇感的表情符號。',
       'budget-friendly': '【特級高CP值模型】：主打省心、高CP值、優質划算、高坪效、符合租補與稅務優惠、小資友善，強調每一分錢都花得值得，並在社群軟體中多加使用 💰, 💡, 🉐, 🈴, 📈 等高性價比、親民的表情符號。',
-      industrial: '【工業實務模型】：語氣務實高效，以業主/專業開發視角說話，強調工業地產（電力、重載、天車、臨路、出入口、廠登、消防與營利效率），並在社群軟體中多加使用 🏭, ⚙️, 📊, 🔩, 🚛 等專業工業生產與物流相關的表情符號。',
+      industrial: '【工業實務模型】：語氣務實高效，以業主/專業开发視角說話，強調工業地產（電力、重載、天車、臨路、出入口、廠登、消防與營利效率），並在社群軟體中多加使用 🏭, ⚙️, 📊, 🔩, 🚛 等專業工業生產與物流相關的表情符號。',
       friendly: '【輕鬆親切模型】：語氣口語、親人無包袱，像在和好友或群組分享、推薦，具有強烈親切感，並在社群軟體中多加使用 😊, 🙌, 👋, 💬, 🏡 等輕鬆、親民的表情符號。',
       story: '【情境故事模型】：擅長透過場景描繪、事業起步或溫馨搬家等第一人稱/第三人稱情境與故事，勾勒出入駐後的生動畫面，引發強烈情感與事業共鳴，並在社群軟體中多加使用 📖, 🌅, 🎯, 🏠, 💭 等富有情懷與故事感的表情符號。'
     }[tone as keyof typeof toneInstruction] || '';
 
-    const dynamicSystemInstruction = `${SYSTEM_INSTRUCTION}
+    const baseInstruction = isIndustrial ? SYSTEM_INSTRUCTION_INDUSTRIAL : SYSTEM_INSTRUCTION;
+    const dynamicSystemInstruction = `${baseInstruction}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 【指定寫作語調】：
@@ -487,40 +479,6 @@ app.post("/api/analyze", async (req, res) => {
 5. ✍️ 融合競爭優勢的「特別推薦文案」（社群快攻版）：融合對方精華，創作一篇更生動吸睛的社群文案。【必須寫出並醒目標註我方物件的租金價格（不管使用什麼語調）】。
 
 請保持精煉，每段大綱字數控制在100字內，不囉唆。`;
-
-    const competitorPrompt_OLD = `
-
-【我的物件資訊】：${myPropertyInfo || '未提供，以文案內容為主'}
-
-【我們產出的文案】：
-${ourCopy || '未提供，請協助分析及撰寫符合我方特點的對抗文案'}
-
-【競品物件連結】：${competitorUrl || '未提供，主要分析對手內容文案'}
-【競品文案內容】：
-${competitorText || '請分析該競品特點'}
-
-請利用你的專業，依據以下格式進行繁體中文分析：
-
-1. 💻 競品文案亮點與強項 (Highlights & Strengths)
-分析對手在吸睛度、關鍵字佈局、痛點切入與資訊完整度等方面的優秀做法。
-
-2. ⚠️ 競品文案盲點與劣勢 (Weekly Points & Blindspots)
-分析對手在排版、字體、SEO友善性、不實廣告法規風險、或者是文案吸引力上的劣勢及不足。
-
-3. ⚔️ 雙方文案維度 PK 擂台 (Head-to-Head Comparison)
-以清楚好看的表格或條列形式，對比雙方在：
-- 第一眼吸睛度（Hooking Power）
-- 排版易讀性（Readability）
-- 社群互動性（Engagement）
-- SEO關鍵字佈局（SEO Optimization）
-- 法規安全與專業度（Regulatory Safety）
-
-4. 🚀 我們的文案優化升級建議 (Actionable Suggestions)
-根據競品的優點，具體指出我們現有文案可以加入、替換或調整什麼獨特的文案細節、關鍵字或情感痛點，讓我們的文案更百戰百勝！
-
-5. ✍️ 融合競品優勢後的「特別推薦文案」（社群快攻版）
-融合對手文案精華與我們物件真實資訊，提供一篇更具殺傷力、充滿表情符號的爆發型社群文案，做為直接參考。
-`;
 
     const response = await generateContentWithRetry(ai, {
       model: "gemini-3.1-flash-lite",
@@ -603,7 +561,7 @@ app.post("/api/generate-titles", async (req, res) => {
 ${details}
 
 【591 標題四大優化法則】：
-1. 嚴禁誇張不實與公平會罰金字眼（絕不使用：最便宜、秒殺、保證收益、首選大爆發、唯一等不實誇大詞彙）。可以使用有憑據、具亮點或符合客觀現狀的特徵：如「高CP值」、「精選優質」、「全新整理」、「附車位」、「實用挑高」、「採光好」。
+1. 嚴禁誇張不實與公平會罰金字眼（絕不使用：最便宜、秒殺、保證出租、精華地段」（未經證實）等誇大或承諾收益字眼）。可以使用有憑據、具亮點或符合客觀現狀的特徵：如「高CP值」、「精選優質」、「全新整理」、「附車位」、「實用挑高」、「採光好」。
 2. 標題長度必須嚴格限制在 15 至 28 個繁體中文字。超過 28 字在 591 手機與網頁版上極易被裁減截斷。
 3. 高點擊率的公式：【精選特色 / 地標機能 / 空間亮點】坪數或型態描述。例如：
    - 【全新整理/採光三房】科博館旁、附平車、大平面陽台

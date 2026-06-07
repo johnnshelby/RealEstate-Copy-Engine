@@ -90,6 +90,7 @@ interface AgentProfile {
   taxId: string;
   broker: string; // 經紀人
   salesperson: string; // 營業員
+  customFooter?: string; // 自定義法規尾段
 }
 
 const DEFAULT_PROFILE: AgentProfile = {
@@ -101,6 +102,17 @@ const DEFAULT_PROFILE: AgentProfile = {
   taxId: '60372057',
   broker: '鄭善仁（113）南市字第001001號',
   salesperson: '黃先生（115）登字第505314號',
+  customFooter: `🤝🏻成交時需收取半個月服務費
+※本廣告自刊登日起七日內有效，過期資訊可能已異動，請來電或加 Line 確認售租狀況。
+
+聯絡方式📲[PHONE]
+Line ID：[LINE_ID]
+經紀業：[COMPANY]
+公司地址：[COMPANY_ADDRESS]
+統編：[TAX_ID]
+經紀人：[BROKER]
+營業員：[SALESPERSON]
+以上廣告文案如有誤差一律依謄本、現況、登記資料為準。`,
 };
 
 
@@ -629,17 +641,27 @@ export default function App() {
   };
 
   const getFormattedFooter = () => {
-    return `🤝🏻成交時需收取半個月服務費
+    const rawTemplate = profile.customFooter || `🤝🏻成交時需收取半個月服務費
 ※本廣告自刊登日起七日內有效，過期資訊可能已異動，請來電或加 Line 確認售租狀況。
 
-聯絡方式📲${profile.phone}
-Line ID：${profile.lineId}
-經紀業：${profile.company}
-公司地址：${profile.companyAddress}
-統編：${profile.taxId}
-經紀人：${profile.broker}
-營業員：${profile.salesperson}
+聯絡方式📲[PHONE]
+Line ID：[LINE_ID]
+經紀業：[COMPANY]
+公司地址：[COMPANY_ADDRESS]
+統編：[TAX_ID]
+經紀人：[BROKER]
+營業員：[SALESPERSON]
 以上廣告文案如有誤差一律依謄本、現況、登記資料為準。`;
+
+    return rawTemplate
+      .replace(/\[NAME\]/g, profile.name || '')
+      .replace(/\[PHONE\]/g, profile.phone || '')
+      .replace(/\[LINE_ID\]/g, profile.lineId || '')
+      .replace(/\[COMPANY\]/g, profile.company || '')
+      .replace(/\[COMPANY_ADDRESS\]/g, profile.companyAddress || '')
+      .replace(/\[TAX_ID\]/g, profile.taxId || '')
+      .replace(/\[BROKER\]/g, profile.broker || '')
+      .replace(/\[SALESPERSON\]/g, profile.salesperson || '');
   };
 
   const [activeTab, setActiveTab] = useState('PLATFORM_STUDY');
@@ -1805,6 +1827,20 @@ Line ID：${profile.lineId}
                       className="w-full bg-brand-cream/20 border border-brand-beige rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-gold transition-colors"
                       placeholder="例如：黃先生（115）登字第505314號"
                     />
+                  </div>
+
+                  <div className="space-y-1.5 col-span-2">
+                    <label className="text-[10px] font-bold text-brand-line uppercase tracking-wider block">自定義法規尾段 / 規範模板 (每一平台發文文案尾端皆會附帶)</label>
+                    <textarea 
+                      rows={6}
+                      value={profile.customFooter || ''}
+                      onChange={e => setProfile({...profile, customFooter: e.target.value})}
+                      placeholder="請輸入自訂法規與規則聲明..."
+                      className="w-full bg-brand-cream/24 border border-brand-beige rounded px-3 py-2 text-xs focus:outline-none focus:border-brand-gold transition-colors font-mono whitespace-pre-wrap"
+                    />
+                    <p className="text-[9px] text-brand-line/60 leading-normal">
+                      💡 提示：此尾段將自動附加至每一篇生成的平台發文尾端。您可自由撰寫固定條款，或使用動態對應標籤：<span className="font-mono text-brand-green">[NAME], [PHONE], [LINE_ID], [COMPANY], [COMPANY_ADDRESS], [TAX_ID], [BROKER], [SALESPERSON]</span> 自動替換為上方個人資訊。
+                    </p>
                   </div>
                 </div>
 
