@@ -75,30 +75,16 @@ async function fetchWithRetry(url: string, options: RequestInit, retries: number
       const contentType = res.headers.get("content-type") || "";
       const isHtmlResponse = !contentType.includes("application/json");
       
-      // If the server returns a 429, 503, or a transient HTML route fallback (e.g., status 200 but HTML content)
-      if (res.status === 429 || res.status === 503 || isHtmlResponse) {
-        let serverError = '';
-        if (contentType.includes("application/json")) {
-          const errorData = await res.clone().json().catch(() => ({}));
-          serverError = errorData.error || '';
-        } else {
-          const textBody = await res.clone().text().catch(() => '');
-          if (textBody.trim().startsWith("<!doctype html>") || textBody.trim().startsWith("<html")) {
-            serverError = "【後端伺服器正在啟動或重新編譯中，系統將於數秒後自動重試】";
-          } else {
-            serverError = textBody.substring(0, 150);
-          }
+      // If the server returns a transient HTML route fallback (e.g., status 200/502 but HTML content because server is restarting/building)
+      if (isHtmlResponse) {
+        let serverError = '【後端伺服器正在啟動或重新編譯中，系統將於數秒後自動重試】';
+        const textBody = await res.clone().text().catch(() => '');
+        if (!textBody.trim().startsWith("<!doctype html>") && !textBody.trim().startsWith("<html")) {
+          serverError = textBody.substring(0, 150);
         }
         
-        let wait = Math.pow(2, i) * 10000; // 10s, 20s, 40s...
-        if (isHtmlResponse) {
-          wait = (i + 1) * 2000; // 2s, 4s, 6s, 8s, 10s for super quick recovery during server restarts
-        }
-        
-        let errorLabel = "API 錯誤";
-        if (res.status === 429) errorLabel = "API 額度超限";
-        else if (res.status === 503) errorLabel = "模型伺服器忙碌";
-        else if (isHtmlResponse) errorLabel = "伺服器初始化中";
+        const wait = (i + 1) * 2000; // 2s, 4s, 6s, 8s, 10s for super quick recovery during server restarts
+        const errorLabel = "伺服器初始化中";
         
         console.warn(`${errorLabel} (${res.status})，${wait / 1000} 秒後重試...`);
         showRetryMsg(`目前${errorLabel} (狀態碼 ${res.status})。系統將於 ${wait / 1000} 秒後自動重試（嘗試次數：${i + 1}/${retries}）...\n${serverError ? `${serverError}` : ""}`);
@@ -126,14 +112,15 @@ async function fetchWithRetry(url: string, options: RequestInit, retries: number
 export async function generateRentalAnalysis(
   propertyInfo: string,
   customFooter: string,
-  tone: string = 'professional'
+  tone: string = 'professional',
+  contactInfo?: string
 ): Promise<string> {
   const response = await fetchWithRetry("/api/generate", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ propertyInfo, customFooter, tone }),
+    body: JSON.stringify({ propertyInfo, customFooter, tone, contactInfo }),
   });
   const data = await handleResponse(response);
   return data.text;
@@ -160,14 +147,15 @@ export async function refinePlatformCopy(
   originalCopy: string,
   refinementInstructions: string,
   platform: string,
-  customFooter: string
+  customFooter: string,
+  contactInfo?: string
 ): Promise<string> {
   const response = await fetchWithRetry("/api/refine", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ originalCopy, refinementInstructions, platform, customFooter }),
+    body: JSON.stringify({ originalCopy, refinementInstructions, platform, customFooter, contactInfo }),
   });
   const data = await handleResponse(response);
   return data.text;

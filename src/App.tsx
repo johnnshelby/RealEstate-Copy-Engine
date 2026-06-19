@@ -664,6 +664,17 @@ Line ID：[LINE_ID]
       .replace(/\[SALESPERSON\]/g, profile.salesperson || '');
   };
 
+  const getContactInfoOnly = () => {
+    return `聯絡人 / 服務人員：${profile.name || ''}
+聯絡電話：${profile.phone || ''}
+Line ID：${profile.lineId || ''}
+經紀業（公司）：${profile.company || ''}
+公司地址：${profile.companyAddress || ''}
+統一編號 (統編)：${profile.taxId || ''}
+經紀人證號：${profile.broker || ''}
+營業員證號：${profile.salesperson || ''}`;
+  };
+
   const [activeTab, setActiveTab] = useState('PLATFORM_STUDY');
 
   const parseResult = (text: string) => {
@@ -840,7 +851,8 @@ Line ID：[LINE_ID]
     setRefineQuery('');
     try {
       const footer = getFormattedFooter();
-      const result = await generateRentalAnalysis(finalInfo, footer, tone);
+      const contactInfo = getContactInfoOnly();
+      const result = await generateRentalAnalysis(finalInfo, footer, tone, contactInfo);
       
       setAnalysisResult(result || '');
       
@@ -885,7 +897,8 @@ Line ID：[LINE_ID]
     setRefinementLoading(true);
     try {
       const footer = getFormattedFooter();
-      const refinedResult = await refinePlatformCopy(currentText, refineQuery, platformKey, footer);
+      const contactInfo = getContactInfoOnly();
+      const refinedResult = await refinePlatformCopy(currentText, refineQuery, platformKey, footer, contactInfo);
       if (refinedResult) {
         setOverrideSections(prev => ({
           ...prev,
