@@ -93,6 +93,19 @@ async function fetchWithRetry(url: string, options: RequestInit, retries: number
         continue;
       }
       
+      if (!res.ok) {
+        if (res.status === 429 || res.status >= 500) {
+          const wait = Math.pow(2, i) * 2000;
+          let errorLabel = res.status === 429 ? "API 額度超限/頻率限制" : "伺服器錯誤";
+          showRetryMsg(`${errorLabel} (狀態碼 ${res.status})。系統將於 ${wait / 1000} 秒後自動重試（嘗試次數：${i + 1}/${retries}）...`);
+          await new Promise(resolve => setTimeout(resolve, wait));
+          continue;
+        }
+        // For other 4xx errors, do not retry
+        hideRetryMsg();
+        return res;
+      }
+      
       hideRetryMsg();
       return res;
     } catch (e) {

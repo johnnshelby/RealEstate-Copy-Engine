@@ -695,6 +695,56 @@ app.post("/api/proxy-scrape", async (req, res) => {
   }
 });
 
+app.get("/api/system-prompts", (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  try {
+    const serverCode = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf-8');
+    
+    const prompts = [
+      {
+        name: '物件文案生成 (Generate)',
+        description: '生成各平台房產行銷文案的系統指令',
+        codeRegex: /const prompt = `(你現在是一位擁有20年經驗的台灣頂級千萬房仲兼爆款文案大師。[\s\S]*?)`;/
+      },
+      {
+        name: '競品文案分析 (Analyze)',
+        description: '分析對手文案並提取優勢的系統指令',
+        codeRegex: /const analyzePrompt = `([\s\S]*?)`;/
+      },
+      {
+        name: '文案微調 (Refine)',
+        description: '針對單一平台進行文案修改與強化的系統指令',
+        codeRegex: /const refinePrompt = `([\s\S]*?)`;/
+      },
+      {
+        name: '生成靈感標題 (Generate Titles)',
+        description: '針對物件資訊產生吸睛標題的系統指令',
+        codeRegex: /const prompt = `(您是精通台灣租賃與銷售的[\s\S]*?)`;/
+      },
+      {
+        name: '網頁爬蟲備案解析 (Proxy Scrape Fallback)',
+        description: '當無法直接讀取網頁時，利用 AI 進行分析的指令',
+        codeRegex: /const crawlPrompt = `([\s\S]*?)`;/
+      }
+    ];
+
+    const results = prompts.map(p => {
+      const match = serverCode.match(p.codeRegex);
+      return {
+        name: p.name,
+        description: p.description,
+        content: match ? match[1].trim() : '無法載入 Prompt。'
+      };
+    });
+
+    res.json({ prompts: results });
+  } catch (err) {
+    console.error("Failed to read prompts:", err);
+    res.status(500).json({ error: "Failed to read system prompts" });
+  }
+});
+
 // Vite server middleware or production static build serving
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

@@ -29,10 +29,12 @@ import {
   Save,
   Heart,
   X,
-  Trash2
+  Trash2,
+  FileCode2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { generateRentalAnalysis, refinePlatformCopy, generateTitles } from './services/aiService';
+import { SystemPromptsModal } from './components/SystemPromptsModal';
 import { db, auth, OperationType, handleFirestoreError } from './lib/firebase';
 import { 
   signInWithPopup, 
@@ -405,6 +407,7 @@ export default function App() {
   const [showCookieModule, setShowCookieModule] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [showPrompts, setShowPrompts] = useState(false);
   const [showMobilePreview, setShowMobilePreview] = useState(false);
   const [isFullWidth, setIsFullWidth] = useState(true);
   const [inputMode, setInputMode] = useState<'free' | 'wizard'>('free');
@@ -1067,6 +1070,15 @@ Line ID：${profile.lineId || ''}
               <span className="w-2 h-2 rounded-full bg-brand-gold animate-pulse"></span>
               <span className="text-[10px] text-brand-cream/70 uppercase tracking-widest">Market Engine Active</span>
             </div>
+            
+            <button
+              onClick={() => setShowPrompts(true)}
+              className="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-brand-green border border-brand-green-light rounded text-[9px] sm:text-[10px] font-bold text-brand-cream hover:bg-brand-green-light transition-colors"
+              title="檢視系統 Prompt 指令"
+            >
+              <FileCode2 className="w-3.5 h-3.5 text-brand-gold" />
+              <span className="hidden md:inline">系統指令</span>
+            </button>
             
             <div className="hidden sm:block h-6 w-px bg-brand-green-light" />
             
@@ -1963,6 +1975,10 @@ Line ID：${profile.lineId || ''}
             </motion.div>
           )}
           
+          {showPrompts && (
+            <SystemPromptsModal onClose={() => setShowPrompts(false)} />
+          )}
+
           {showCookieModule && (
             <motion.div
               initial={{ opacity: 0 }}
